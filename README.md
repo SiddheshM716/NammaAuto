@@ -15,8 +15,9 @@ For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
 
-<img src="assets/image1" alt="Description of image" width="50%" height="50%">
-<img src="assets/image2" alt="Description of image" width="50%" height="50%">
-<img src="assets/image3" alt="Description of image" width="50%" height="50%">
-<img src="assets/image4" alt="Description of image" width="50%" height="50%">
-<img src="assets/image5" alt="Description of image" width="50%" height="50%">
+
+<img src="assets/image1" alt="Description of image" width="25%">
+<img src="assets/image2" alt="Description of image" width="25%">
+<img src="assets/image3" alt="Description of image" width="25%">
+<img src="assets/image4" alt="Description of image" width="25%">
+<img src="assets/image5" alt="Description of image" width="25%">
