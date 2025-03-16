@@ -16,8 +16,23 @@ For help getting started with Flutter development, view the
 samples, guidance on mobile development, and a full API reference.
 
 
-<img src="assets/image1" alt="Description of image" width="25%">
-<img src="assets/image2" alt="Description of image" width="25%">
-<img src="assets/image3" alt="Description of image" width="25%">
-<img src="assets/image4" alt="Description of image" width="25%">
-<img src="assets/image5" alt="Description of image" width="25%">
+<style>
+    .image-row {
+        display: flex;
+        justify-content: center; /* Center the images */
+        gap: 10px; /* Space between images */
+    }
+
+    .image-row img {
+        width: 25%; /* Reduce size to 25% */
+        height: auto; /* Maintain aspect ratio */
+    }
+</style>
+
+<div class="image-row">
+    <img src="assets/image1" alt="Description of image">
+    <img src="assets/image2" alt="Description of image">
+    <img src="assets/image3" alt="Description of image">
+    <img src="assets/image4" alt="Description of image">
+    <img src="assets/image5" alt="Description of image">
+</div>
