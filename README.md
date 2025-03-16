@@ -15,6 +15,14 @@ For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
 
+Solution Overview:
+
+1. Predicting demand Locations & guiding Drivers.
+2. Prioritizing Sensitive Destinations.
+3. Point-Based Level-Up System for Drivers to overcome ride denials.
+4. Rewarding Drivers for accepting rides which was rejected before.
+5. A real-time tracking system for shared autos, displaying Live Location
+of the auto on the map helping passengers plan their travel efficiently.
 
 <span>
     <img src="assets/image1" alt="Image 1" width="25%">
