@@ -18,14 +18,15 @@ samples, guidance on mobile development, and a full API reference.
 
 <style>
     .image-row {
-        display: flex;
-        justify-content: center; /* Center the images */
+        display: grid;
+        grid-template-columns: repeat(5, 1fr); /* 5 images in a row */
         gap: 10px; /* Space between images */
+        justify-items: center;
     }
 
     .image-row img {
-        width: 25%; /* Reduce size to 25% */
-        height: auto; /* Maintain aspect ratio */
+        width: 25%;
+        height: auto;
     }
 </style>
 
