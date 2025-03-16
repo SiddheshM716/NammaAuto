@@ -16,12 +16,10 @@ For help getting started with Flutter development, view the
 samples, guidance on mobile development, and a full API reference.
 
 
-<table>
-    <tr>
-        <td><img src="assets/image1" alt="Image 1" width="25%"></td>
-        <td><img src="assets/image2" alt="Image 2" width="25%"></td>
-        <td><img src="assets/image3" alt="Image 3" width="25%"></td>
-        <td><img src="assets/image4" alt="Image 4" width="25%"></td>
-        <td><img src="assets/image5" alt="Image 5" width="25%"></td>
-    </tr>
-</table>
+<span>
+    <img src="assets/image1" alt="Image 1" width="25%">
+    <img src="assets/image2" alt="Image 2" width="25%">
+    <img src="assets/image3" alt="Image 3" width="25%">
+    <img src="assets/image4" alt="Image 4" width="25%">
+    <img src="assets/image5" alt="Image 5" width="25%">
+</span>
