@@ -1,6 +1,6 @@
-# rideauto
+# NammaAuto
 
-A new Flutter project.
+Mobile Application that adds features to Namma Yatri
 
 ## Getting Started
 
