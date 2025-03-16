@@ -16,24 +16,12 @@ For help getting started with Flutter development, view the
 samples, guidance on mobile development, and a full API reference.
 
 
-<style>
-    .image-row {
-        display: grid;
-        grid-template-columns: repeat(5, 1fr); /* 5 images in a row */
-        gap: 10px; /* Space between images */
-        justify-items: center;
-    }
-
-    .image-row img {
-        width: 25%;
-        height: auto;
-    }
-</style>
-
-<div class="image-row">
-    <img src="assets/image1" alt="Description of image">
-    <img src="assets/image2" alt="Description of image">
-    <img src="assets/image3" alt="Description of image">
-    <img src="assets/image4" alt="Description of image">
-    <img src="assets/image5" alt="Description of image">
-</div>
+<table>
+    <tr>
+        <td><img src="assets/image1" alt="Image 1" width="25%"></td>
+        <td><img src="assets/image2" alt="Image 2" width="25%"></td>
+        <td><img src="assets/image3" alt="Image 3" width="25%"></td>
+        <td><img src="assets/image4" alt="Image 4" width="25%"></td>
+        <td><img src="assets/image5" alt="Image 5" width="25%"></td>
+    </tr>
+</table>
