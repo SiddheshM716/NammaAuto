@@ -1,9 +1,17 @@
+import 'dart:math';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseService {
   final SupabaseClient _client = Supabase.instance.client;
 
-  // Insert a new ride request
+  // Generate a random 6-digit OTP
+  String _generateOTP() {
+    Random random = Random();
+    int otp = 1000 + random.nextInt(9000); // Generates a number between 100000 and 999999
+    return otp.toString();
+  }
+
+  // Insert a new ride request with OTP
   Future<void> insertRideRequest({
     required int userId,
     required String userName,
@@ -16,6 +24,8 @@ class SupabaseService {
     required String pickupAddress,
   }) async {
     try {
+      String otp = _generateOTP(); // Generate OTP
+
       await _client.from('ride_request').insert({
         'user_id': userId,
         'user_name': userName,
@@ -26,12 +36,74 @@ class SupabaseService {
         'drop_lng': dropLng,
         'drop_address': dropAddress,
         'pick_up_address': pickupAddress,
+        'otp': otp, // Store the OTP in the database
       });
     } catch (e) {
       print('Error inserting ride request: $e');
       rethrow;
     }
   }
+  // Check if a ride request has been accepted by a driver
+Future<Map<String, dynamic>?> checkRideRequestStatus(int requestId) async {
+  try {
+    // Fetch the ride status from the ridestatus table
+    final response = await _client
+        .from('ridestatus')
+        .select('ride_accepted, ride_cancelled, req_status')
+        .eq('requestid', requestId)
+        .single();
+
+    // Check if the ride has been accepted
+    if (response['ride_accepted'] == true) {
+      return response;
+    }
+    return null;
+  } catch (e) {
+    print('Error checking ride request status: $e');
+    return null;
+  }
+}
+
+// Fetch driver details and OTP for an accepted ride request
+Future<Map<String, dynamic>?> fetchDriverDetails(int requestId) async {
+  try {
+    final response = await _client
+        .from('ridestatus')
+        .select('driverid, otp')
+        .eq('requestid', requestId)
+        .single();
+
+    if (response != null) {
+      final driverDetails = await _client
+          .from('drivers')
+          .select('name, phone_number, current_lat, current_lng')
+          .eq('id', response['driverid'])
+          .single();
+
+      return {
+        ...driverDetails,
+        'otp': response['otp'],
+      };
+    }
+    return null;
+  } catch (e) {
+    print('Error fetching driver details: $e');
+    return null;
+  }
+}
+  Future<Map<String, dynamic>> fetchRideRequestById(int requestId) async {
+  try {
+    final response = await _client
+        .from('ride_request')
+        .select()
+        .eq('id', requestId)
+        .single();
+    return response;
+  } catch (e) {
+    print('Error fetching ride request: $e');
+    rethrow;
+  }
+}
 
   // Fetch all ride requests that are not accepted, cancelled, or completed
   Future<List<Map<String, dynamic>>> fetchRideRequests() async {
@@ -92,7 +164,30 @@ class SupabaseService {
       rethrow;
     }
   }
+  Future<void> updateDriverPoints(int points) async {
+  try {
+    // Hardcode driverId to 3
+    final driverId = 3;
 
+    // Fetch current points for driverId 3
+    final response = await _client
+        .from('drivers')
+        .select('points')
+        .eq('id', driverId)
+        .single();
+
+    final currentPoints = response['points'] ?? 0;
+
+    // Update points for driverId 3
+    await _client
+        .from('drivers')
+        .update({'points': currentPoints + points})
+        .eq('id', driverId);
+  } catch (e) {
+    print('Error updating driver points: $e');
+    rethrow;
+  }
+}
   // Insert ride details into ridestatus table
   Future<void> insertRideStatus({
     required int driverId,

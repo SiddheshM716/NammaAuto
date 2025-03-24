@@ -8,6 +8,8 @@ import '../utils/notification_utils.dart';
 import 'dart:async';
 import 'package:location/location.dart';
 import 'navigation_screen.dart';
+import 'heatmap.dart';
+import 'home_screen.dart';
 
 class DriverScreen extends StatefulWidget {
   @override
@@ -53,25 +55,27 @@ class _DriverScreenState extends State<DriverScreen> {
   }
 
   void _startCountdownTimer() {
-    _countdownTimer?.cancel();
-    _timerSeconds = 20;
-    _countdownTimer = Timer.periodic(Duration(seconds: 1), (timer) async {
-      if (_timerSeconds > 0) {
+  _countdownTimer?.cancel();
+  _timerSeconds = 20;
+  _countdownTimer = Timer.periodic(Duration(seconds: 1), (timer) async {
+    if (_timerSeconds > 0) {
+      if (mounted) {
         setState(() {
           _timerSeconds--;
         });
-      } else {
-        _countdownTimer?.cancel();
-        if (rideRequests.isNotEmpty) {
-          await _cancelRideRequest();
-        }
-        await _fetchRideRequests();
-        if (rideRequests.isNotEmpty) {
-          _startCountdownTimer();
-        }
       }
-    });
-  }
+    } else {
+      _countdownTimer?.cancel();
+      if (rideRequests.isNotEmpty) {
+        await _cancelRideRequest();
+      }
+      await _fetchRideRequests();
+      if (rideRequests.isNotEmpty && mounted) {
+        _startCountdownTimer();
+      }
+    }
+  });
+}
 
   Future<void> _getDriverLocation() async {
     bool serviceEnabled = await _location.serviceEnabled();
@@ -87,14 +91,14 @@ class _DriverScreenState extends State<DriverScreen> {
     }
 
     _location.onLocationChanged.listen((LocationData locationData) {
-      if (!mounted || locationData.latitude == null || locationData.longitude == null) return;
+  if (!mounted || locationData.latitude == null || locationData.longitude == null) return;
 
-      setState(() {
-        _driverLocation = LatLng(locationData.latitude!, locationData.longitude!);
-        _updateMap();
-        _updateMarkers();
-      });
-    });
+  setState(() {
+    _driverLocation = LatLng(locationData.latitude!, locationData.longitude!);
+    _updateMap();
+    _updateMarkers();
+  });
+});
   }
 
   void _updateMap() {
@@ -103,128 +107,132 @@ class _DriverScreenState extends State<DriverScreen> {
   }
 
   Future<void> _fetchRideRequests() async {
-    setState(() {
-      _isLoading = true;
-    });
+  if (!mounted) return;
 
-    try {
-      final requests = await _supabaseService.fetchRideRequests();
-      final validRequests = requests.where((request) =>
-          request['ride_cancelled'] != true && request['ride_accepted'] != true).toList();
+  setState(() {
+    _isLoading = true;
+  });
 
-      await Future.wait(validRequests.map((request) async {
-        try {
-          Map<String, String> categoryData = await _googleMapsService.getLocationCategoryAndTier(request['drop_address']);
-          request['place_type'] = categoryData['category'];
-          request['priority'] = categoryData['tier'];
-        } catch (e) {
-          request['place_type'] = 'Unknown';
-          request['priority'] = 'Tier 4';
-        }
-      }));
+  try {
+    final requests = await _supabaseService.fetchRideRequests();
+    final validRequests = requests.where((request) =>
+        request['ride_cancelled'] != true && request['ride_accepted'] != true).toList();
 
-      validRequests.sort((a, b) => _comparePriority(a['priority'], b['priority']));
+    await Future.wait(validRequests.map((request) async {
+      try {
+        Map<String, String> categoryData = await _googleMapsService.getLocationCategoryAndTier(request['drop_address']);
+        request['place_type'] = categoryData['category'];
+        request['priority'] = categoryData['tier'];
+      } catch (e) {
+        request['place_type'] = 'Unknown';
+        request['priority'] = 'Tier 4';
+      }
+    }));
 
-      if (mounted) {
-        setState(() {
-          rideRequests = validRequests;
-          _isLoading = false;
-        });
+    validRequests.sort((a, b) => _comparePriority(a['priority'], b['priority']));
 
-        if (rideRequests.isNotEmpty) {
-          _startCountdownTimer();
-        }
+    if (mounted) {
+      setState(() {
+        rideRequests = validRequests;
+        _isLoading = false;
+      });
+
+      if (rideRequests.isNotEmpty) {
+        _startCountdownTimer();
+      }
+    }
+
+    _showNotifications();
+    _updateMarkers();
+  } catch (e) {
+    if (mounted) {
+      setState(() {
+        rideRequests = [];
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to fetch ride requests: $e')),
+      );
+    }
+  }
+}
+
+  void _updateMarkers() {
+  if (!mounted) return;
+
+  setState(() {
+    _markers.clear();
+    _polylines.clear();
+
+    if (rideRequests.isNotEmpty) {
+      final request = rideRequests.first;
+
+      if (request['pick_up_lat'] == null || request['pick_up_lng'] == null ||
+          request['drop_lat'] == null || request['drop_lng'] == null) {
+        print('Invalid LatLng values in ride request');
+        return;
       }
 
-      _showNotifications();
-      _updateMarkers();
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          rideRequests = [];
-          _isLoading = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to fetch ride requests: $e')),
+      final LatLng pickupLocation = LatLng(
+        request['pick_up_lat'],
+        request['pick_up_lng'],
+      );
+      final LatLng dropLocation = LatLng(
+        request['drop_lat'],
+        request['drop_lng'],
+      );
+
+      _markers.add(
+        Marker(
+          markerId: MarkerId('pickup'),
+          position: pickupLocation,
+          infoWindow: InfoWindow(title: 'Pickup', snippet: request['pick_up_address']),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+        ),
+      );
+      _markers.add(
+        Marker(
+          markerId: MarkerId('drop'),
+          position: dropLocation,
+          infoWindow: InfoWindow(title: 'Drop', snippet: request['drop_address']),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+        ),
+      );
+
+      _fetchRoute(pickupLocation, dropLocation);
+
+      final bounds = LatLngBounds(
+        southwest: LatLng(
+          pickupLocation.latitude < dropLocation.latitude
+              ? pickupLocation.latitude
+              : dropLocation.latitude,
+          pickupLocation.longitude < dropLocation.longitude
+              ? pickupLocation.longitude
+              : dropLocation.longitude,
+        ),
+        northeast: LatLng(
+          pickupLocation.latitude > dropLocation.latitude
+              ? pickupLocation.latitude
+              : dropLocation.latitude,
+          pickupLocation.longitude > dropLocation.longitude
+              ? pickupLocation.longitude
+              : dropLocation.longitude,
+        ),
+      );
+
+      if (_mapController != null) {
+        final double screenHeight = MediaQuery.of(context).size.height;
+        final double screenWidth = MediaQuery.of(context).size.width;
+        final double maxPadding = (screenHeight / 2).clamp(0, screenWidth / 2);
+        final double padding = maxPadding * 0.4;
+
+        _mapController!.animateCamera(
+          CameraUpdate.newLatLngBounds(bounds, padding),
         );
       }
     }
-  }
-
-  void _updateMarkers() {
-    setState(() {
-      _markers.clear();
-      _polylines.clear();
-
-      if (rideRequests.isNotEmpty) {
-        final request = rideRequests.first;
-
-        if (request['pick_up_lat'] == null || request['pick_up_lng'] == null ||
-            request['drop_lat'] == null || request['drop_lng'] == null) {
-          print('Invalid LatLng values in ride request');
-          return;
-        }
-
-        final LatLng pickupLocation = LatLng(
-          request['pick_up_lat'],
-          request['pick_up_lng'],
-        );
-        final LatLng dropLocation = LatLng(
-          request['drop_lat'],
-          request['drop_lng'],
-        );
-
-        _markers.add(
-          Marker(
-            markerId: MarkerId('pickup'),
-            position: pickupLocation,
-            infoWindow: InfoWindow(title: 'Pickup', snippet: request['pick_up_address']),
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-          ),
-        );
-        _markers.add(
-          Marker(
-            markerId: MarkerId('drop'),
-            position: dropLocation,
-            infoWindow: InfoWindow(title: 'Drop', snippet: request['drop_address']),
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          ),
-        );
-
-        _fetchRoute(pickupLocation, dropLocation);
-
-        final bounds = LatLngBounds(
-          southwest: LatLng(
-            pickupLocation.latitude < dropLocation.latitude
-                ? pickupLocation.latitude
-                : dropLocation.latitude,
-            pickupLocation.longitude < dropLocation.longitude
-                ? pickupLocation.longitude
-                : dropLocation.longitude,
-          ),
-          northeast: LatLng(
-            pickupLocation.latitude > dropLocation.latitude
-                ? pickupLocation.latitude
-                : dropLocation.latitude,
-            pickupLocation.longitude > dropLocation.longitude
-                ? pickupLocation.longitude
-                : dropLocation.longitude,
-          ),
-        );
-
-        if (_mapController != null) {
-          final double screenHeight = MediaQuery.of(context).size.height;
-          final double screenWidth = MediaQuery.of(context).size.width;
-          final double maxPadding = (screenHeight / 2).clamp(0, screenWidth / 2);
-          final double padding = maxPadding * 0.4;
-
-          _mapController!.animateCamera(
-            CameraUpdate.newLatLngBounds(bounds, padding),
-          );
-        }
-      }
-    });
-  }
+  });
+}
 
   Future<void> _fetchRoute(LatLng origin, LatLng destination) async {
     final String url =
@@ -485,34 +493,69 @@ class _DriverScreenState extends State<DriverScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: rideRequests.isNotEmpty ? MediaQuery.of(context).size.height * 0.5 : 0,
-            child: GoogleMap(
-              onMapCreated: (controller) {
-                _mapController = controller;
-                _updateMap();
-              },
-              initialCameraPosition: CameraPosition(
-                target: _driverLocation ?? LatLng(12.9716, 77.5946),
-                zoom: 14,
-              ),
-              markers: _markers,
-              polylines: _polylines,
-              myLocationEnabled: true,
-              myLocationButtonEnabled: true,
+Widget build(BuildContext context) {
+  return Scaffold(
+    body: Stack(
+      children: [
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: rideRequests.isNotEmpty ? MediaQuery.of(context).size.height * 0.5 : 0,
+          child: GoogleMap(
+            onMapCreated: (controller) {
+              _mapController = controller;
+              _updateMap();
+            },
+            initialCameraPosition: CameraPosition(
+              target: _driverLocation ?? LatLng(12.9716, 77.5946),
+              zoom: 14,
             ),
+            markers: _markers,
+            polylines: _polylines,
+            myLocationEnabled: true,
+            myLocationButtonEnabled: true,
           ),
-          _buildBackButton(),
-          if (rideRequests.isNotEmpty) _buildRideRequestCard(),
-        ],
-      ),
-    );
-  }
+        ),
+        _buildBackButton(),
+        if (rideRequests.isNotEmpty) _buildRideRequestCard(),
+
+        // Floating Action Button to Navigate to RealTimeMap (Bottom Left)
+        Positioned(
+          left: 16,
+          bottom: 16,
+          child: FloatingActionButton(
+            heroTag: "realTimeMapButton",
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => RoadMapScreen()),
+              );
+            },
+            child: Icon(Icons.map),
+            backgroundColor: Colors.blue,
+          ),
+        ),
+
+        // Floating Action Button to Navigate to HomeScreen (Menu Button - Top Right)
+        Positioned(
+          top: 40, // Adjust as needed for spacing
+          right: 16,
+          child: FloatingActionButton(
+            heroTag: "menuButton",
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => HomeScreen()),
+              );
+            },
+            child: Icon(Icons.menu),
+            backgroundColor: Colors.green,
+            mini: true, // Optional: makes the button smaller
+          ),
+        ),
+      ],
+    ),
+  );
+}
 }

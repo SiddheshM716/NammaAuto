@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ride Demand Guide</title>
+
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC2y73YcxoMQ-ZIjtljIfirdi-k0pXe5M4"></script>
+    
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        #map {
+            height: 500px;
+            width: 80%;
+            margin: 20px auto;
+        }
+        .input-container {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Find Nearest High-Demand Ward</h2>
+
+    <div class="input-container">
+        <label>Latitude: <input type="text" id="lat" value="12.9716"></label>
+        <label>Longitude: <input type="text" id="lon" value="77.5946"></label>
+        <button onclick="getNearestWard()">Find Nearest High-Demand Ward</button>
+    </div>
+
+    <div id="map"></div>
+
+    <script>
+        let map;
+        let userMarker, wardMarker;
+        let roadPolylines = [];
+
+        function initMap() {
+            map = new google.maps.Map(document.getElementById("map"), {
+                center: { lat: 12.9716, lng: 77.5946 },
+                zoom: 12
+            });
+
+            // Default user marker
+            userMarker = new google.maps.Marker({
+                position: { lat: 12.9716, lng: 77.5946 },
+                map: map,
+                title: "Your Location"
+            });
+        }
+
+        function getNearestWard() {
+            let lat = parseFloat(document.getElementById("lat").value);
+            let lon = parseFloat(document.getElementById("lon").value);
+
+            if (isNaN(lat) || isNaN(lon)) {
+                alert("Please enter valid latitude and longitude!");
+                return;
+            }
+
+            fetch(`http://127.0.0.1:8000/roaming-area?lat=${lat}&lon=${lon}`)
+                .then(response => response.json())
+                .then(data => {
+                    let wardLat = data.latitude;
+                    let wardLon = data.longitude;
+
+                    // Clear existing markers
+                    if (userMarker) userMarker.setMap(null);
+                    if (wardMarker) wardMarker.setMap(null);
+
+                    // Clear previous road polylines
+                    roadPolylines.forEach(polyline => polyline.setMap(null));
+                    roadPolylines = [];
+
+                    // Add user marker
+                    userMarker = new google.maps.Marker({
+                        position: { lat: lat, lng: lon },
+                        map: map,
+                        title: "Your Location"
+                    });
+
+                    // Add high-demand ward marker
+                    wardMarker = new google.maps.Marker({
+                        position: { lat: wardLat, lng: wardLon },
+                        map: map,
+                        title: `Nearest High-Demand Ward: ${data.ward}`,
+                    });
+
+                    // Center map on ward location
+                    map.setCenter({ lat: wardLat, lng: wardLon });
+
+                    // Draw road network if available
+                    if (data.road_network && data.road_network.roads) {
+                        data.road_network.roads.forEach(road => {
+                            let roadPath = road.map(coord => ({ lat: coord[1], lng: coord[0] })); // Convert [lon, lat] -> {lat, lng}
+
+                            let roadPolyline = new google.maps.Polyline({
+                                path: roadPath,
+                                geodesic: true,
+                                strokeColor: "#0000FF",
+                                strokeOpacity: 1.0,
+                                strokeWeight: 3
+                            });
+
+                            roadPolyline.setMap(map);
+                            roadPolylines.push(roadPolyline);
+                        });
+                    } else {
+                        console.warn("No road data available.");
+                    }
+                })
+                .catch(error => console.error("Error:", error));
+        }
+
+        window.onload = initMap;
+    </script>
+</body>
+</html>

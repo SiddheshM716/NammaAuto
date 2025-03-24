@@ -1,9 +1,11 @@
+
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:location/location.dart';
 import '../services/supabase_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class NavigationScreen extends StatefulWidget {
   final LatLng pickupLocation;
@@ -33,6 +35,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
   bool _isPickedUp = false;
   final String _googleMapsApiKey = 'AIzaSyAvibCYQuoqU1BNqfWV0QkTXvT39-Wz954';
   final SupabaseService _supabaseService = SupabaseService();
+  final TextEditingController _otpController = TextEditingController();
 
   @override
   void initState() {
@@ -44,6 +47,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
   @override
   void dispose() {
     _mapController?.dispose();
+    _otpController.dispose();
     super.dispose();
   }
 
@@ -181,44 +185,92 @@ class _NavigationScreenState extends State<NavigationScreen> {
     return points;
   }
 
-  void _onPickupConfirmed() {
-    setState(() {
-      _isPickedUp = true;
-    });
-
-    // Fetch route to drop location
-    _fetchRoute(_currentLocation!, widget.dropLocation);
-
-    // Calculate bounds to fit both pickup and drop locations
-    final bounds = LatLngBounds(
-      southwest: LatLng(
-        widget.pickupLocation.latitude < widget.dropLocation.latitude
-            ? widget.pickupLocation.latitude
-            : widget.dropLocation.latitude,
-        widget.pickupLocation.longitude < widget.dropLocation.longitude
-            ? widget.pickupLocation.longitude
-            : widget.dropLocation.longitude,
-      ),
-      northeast: LatLng(
-        widget.pickupLocation.latitude > widget.dropLocation.latitude
-            ? widget.pickupLocation.latitude
-            : widget.dropLocation.latitude,
-        widget.pickupLocation.longitude > widget.dropLocation.longitude
-            ? widget.pickupLocation.longitude
-            : widget.dropLocation.longitude,
-      ),
+  Future<void> _onPickupConfirmed() async {
+    // Show OTP input dialog
+    final enteredOTP = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Enter OTP'),
+          content: TextField(
+            controller: _otpController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(hintText: 'Enter OTP'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, _otpController.text),
+              child: Text('Submit'),
+            ),
+          ],
+        );
+      },
     );
 
-    // Animate camera to fit the bounds
-    if (_mapController != null) {
-      final double screenHeight = MediaQuery.of(context).size.height;
-      final double screenWidth = MediaQuery.of(context).size.width;
-      final double maxPadding = (screenHeight / 2).clamp(0, screenWidth / 2);
-      final double padding = maxPadding * 0.4;
-
-      _mapController!.animateCamera(
-        CameraUpdate.newLatLngBounds(bounds, padding),
+    if (enteredOTP == null || enteredOTP.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please enter the OTP')),
       );
+      return;
+    }
+
+    // Fetch OTP from the database
+    final rideRequest = await _supabaseService.fetchRideRequestById(widget.requestId);
+    final storedOTP = rideRequest['otp'];
+
+    if (enteredOTP == storedOTP) {
+      setState(() {
+        _isPickedUp = true;
+      });
+
+      // Fetch route to drop location
+      _fetchRoute(_currentLocation!, widget.dropLocation);
+
+      // Calculate bounds to fit both pickup and drop locations
+      final bounds = LatLngBounds(
+        southwest: LatLng(
+          widget.pickupLocation.latitude < widget.dropLocation.latitude
+              ? widget.pickupLocation.latitude
+              : widget.dropLocation.latitude,
+          widget.pickupLocation.longitude < widget.dropLocation.longitude
+              ? widget.pickupLocation.longitude
+              : widget.dropLocation.longitude,
+        ),
+        northeast: LatLng(
+          widget.pickupLocation.latitude > widget.dropLocation.latitude
+              ? widget.pickupLocation.latitude
+              : widget.dropLocation.latitude,
+          widget.pickupLocation.longitude > widget.dropLocation.longitude
+              ? widget.pickupLocation.longitude
+              : widget.dropLocation.longitude,
+        ),
+      );
+
+      // Animate camera to fit the bounds
+      if (_mapController != null) {
+        final double screenHeight = MediaQuery.of(context).size.height;
+        final double screenWidth = MediaQuery.of(context).size.width;
+        final double maxPadding = (screenHeight / 2).clamp(0, screenWidth / 2);
+        final double padding = maxPadding * 0.4;
+
+        _mapController!.animateCamera(
+          CameraUpdate.newLatLngBounds(bounds, padding),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Invalid OTP. Please try again.')),
+      );
+    }
+  }
+
+  Future<void> _launchGoogleMapsNavigation(LatLng destination) async {
+    final String url = 'https://www.google.com/maps/dir/?api=1&destination=${destination.latitude},${destination.longitude}&travelmode=driving';
+
+    if (await canLaunch(url)) {
+      await launch(url);
+    } else {
+      throw 'Could not launch $url';
     }
   }
 
@@ -304,13 +356,26 @@ class _NavigationScreenState extends State<NavigationScreen> {
               bottom: 16,
               left: 16,
               right: 16,
-              child: ElevatedButton(
-                onPressed: _onPickupConfirmed,
-                child: Text('Customer Picked Up'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                ),
+              child: Column(
+                children: [
+                  ElevatedButton(
+                    onPressed: _onPickupConfirmed,
+                    child: Text('Enter OTP'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: () => _launchGoogleMapsNavigation(widget.pickupLocation),
+                    child: Text('Navigate to Pickup'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ],
               ),
             ),
           if (_isPickedUp)
@@ -318,13 +383,26 @@ class _NavigationScreenState extends State<NavigationScreen> {
               bottom: 16,
               left: 16,
               right: 16,
-              child: ElevatedButton(
-                onPressed: _onEndRide,
-                child: Text('End Ride'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                ),
+              child: Column(
+                children: [
+                  ElevatedButton(
+                    onPressed: _onEndRide,
+                    child: Text('End Ride'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: () => _launchGoogleMapsNavigation(widget.dropLocation),
+                    child: Text('Navigate to Drop'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ],
               ),
             ),
         ],

@@ -4,6 +4,9 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../services/supabase_service.dart';
 import 'package:location/location.dart';
+import 'loading_screen.dart';
+import 'driver_tracking_screen.dart';
+import 'real_time_map.dart';
 
 class UserScreen extends StatefulWidget {
   @override
@@ -26,6 +29,164 @@ class _UserScreenState extends State<UserScreen> {
   Set<Marker> _markers = {}; // Markers for pickup and drop locations
   Set<Polyline> _polylines = {}; // Polylines for the route
 
+  // Define dark mode map style matching Google Maps dark mode
+  String _darkMapStyle = '''
+[
+  {
+    "featureType": "all",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#242f3e"
+      }
+    ]
+  },
+  {
+    "featureType": "all",
+    "elementType": "labels.text.stroke",
+    "stylers": [
+      {
+        "lightness": -80
+      }
+    ]
+  },
+  {
+    "featureType": "administrative",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#746855"
+      }
+    ]
+  },
+  {
+    "featureType": "administrative.locality",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#d59563"
+      }
+    ]
+  },
+  {
+    "featureType": "poi",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#d59563"
+      }
+    ]
+  },
+  {
+    "featureType": "poi.park",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#263c3f"
+      }
+    ]
+  },
+  {
+    "featureType": "poi.park",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#6b9a76"
+      }
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "geometry.fill",
+    "stylers": [
+      {
+        "color": "#2b3544"
+      }
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#9ca5b3"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "geometry.fill",
+    "stylers": [
+      {
+        "color": "#746855"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "geometry.stroke",
+    "stylers": [
+      {
+        "color": "#1f2835"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#f3d19c"
+      }
+    ]
+  },
+  {
+    "featureType": "transit",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#2f3948"
+      }
+    ]
+  },
+  {
+    "featureType": "transit.station",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#d59563"
+      }
+    ]
+  },
+  {
+    "featureType": "water",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#17263c"
+      }
+    ]
+  },
+  {
+    "featureType": "water",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#515c6d"
+      }
+    ]
+  },
+  {
+    "featureType": "water",
+    "elementType": "labels.text.stroke",
+    "stylers": [
+      {
+        "lightness": -20
+      }
+    ]
+  }
+]
+''';
   @override
   void initState() {
     super.initState();
@@ -34,6 +195,8 @@ class _UserScreenState extends State<UserScreen> {
 
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
+    // Apply dark mode style once the map is created
+    _mapController!.setMapStyle(_darkMapStyle);
   }
 
   /// Fetches place suggestions as the user types
@@ -144,7 +307,7 @@ class _UserScreenState extends State<UserScreen> {
             Polyline(
               polylineId: PolylineId('route'),
               points: routeCoordinates,
-              color: Colors.blue,
+              color: Colors.cyanAccent, // Better color for dark mode
               width: 5,
             ),
           );
@@ -197,6 +360,7 @@ class _UserScreenState extends State<UserScreen> {
             markerId: MarkerId('pickup'),
             position: _pickupLocation!,
             infoWindow: InfoWindow(title: 'Pickup Location'),
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
           ),
         );
       }
@@ -206,6 +370,7 @@ class _UserScreenState extends State<UserScreen> {
             markerId: MarkerId('drop'),
             position: _dropLocation!,
             infoWindow: InfoWindow(title: 'Drop Location'),
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
           ),
         );
       }
@@ -214,84 +379,104 @@ class _UserScreenState extends State<UserScreen> {
 
   /// Zooms the map to fit all markers on the screen
   void _zoomToFitMarkers() {
-  if (_pickupLocation == null || _dropLocation == null || _mapController == null) {
-    return;
-  }
-
-  // Create a LatLngBounds object to fit both markers
-  LatLngBounds bounds = LatLngBounds(
-    southwest: LatLng(
-      _pickupLocation!.latitude < _dropLocation!.latitude
-          ? _pickupLocation!.latitude
-          : _dropLocation!.latitude,
-      _pickupLocation!.longitude < _dropLocation!.longitude
-          ? _pickupLocation!.longitude
-          : _dropLocation!.longitude,
-    ),
-    northeast: LatLng(
-      _pickupLocation!.latitude > _dropLocation!.latitude
-          ? _pickupLocation!.latitude
-          : _dropLocation!.latitude,
-      _pickupLocation!.longitude > _dropLocation!.longitude
-          ? _pickupLocation!.longitude
-          : _dropLocation!.longitude,
-    ),
-  );
-
-  // Calculate padding based on screen size
-  final double screenWidth = MediaQuery.of(context).size.width;
-  final double screenHeight = MediaQuery.of(context).size.height;
-
-  // Adjust padding to account for UI elements (e.g., text boxes, buttons)
-  final double padding = screenHeight * 0.2; // 20% of screen height as padding
-
-  // Animate the camera to fit the bounds with padding
-  _mapController!.animateCamera(
-    CameraUpdate.newLatLngBounds(bounds, padding),
-  );
-}
-
-  /// Submits the ride request to Supabase
-  Future<void> _submitRideRequest() async {
-    if (_pickupLocation == null || _dropLocation == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Please select both pickup and drop locations')),
-      );
+    if (_pickupLocation == null || _dropLocation == null || _mapController == null) {
       return;
     }
 
-    try {
-      await _supabaseService.insertRideRequest(
-        userId: 3,
-        userName: 'John Doe',
-        userPhno: '1234567890',
-        pickUpLat: _pickupLocation!.latitude,
-        pickUpLng: _pickupLocation!.longitude,
-        dropLat: _dropLocation!.latitude,
-        dropLng: _dropLocation!.longitude,
-        dropAddress: _dropController.text,
-        pickupAddress: _pickupController.text,
-      );
+    // Create a LatLngBounds object to fit both markers
+    LatLngBounds bounds = LatLngBounds(
+      southwest: LatLng(
+        _pickupLocation!.latitude < _dropLocation!.latitude
+            ? _pickupLocation!.latitude
+            : _dropLocation!.latitude,
+        _pickupLocation!.longitude < _dropLocation!.longitude
+            ? _pickupLocation!.longitude
+            : _dropLocation!.longitude,
+      ),
+      northeast: LatLng(
+        _pickupLocation!.latitude > _dropLocation!.latitude
+            ? _pickupLocation!.latitude
+            : _dropLocation!.latitude,
+        _pickupLocation!.longitude > _dropLocation!.longitude
+            ? _pickupLocation!.longitude
+            : _dropLocation!.longitude,
+      ),
+    );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ride request submitted successfully!')),
-      );
+    // Calculate padding based on screen size
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final double screenHeight = MediaQuery.of(context).size.height;
 
-      // Clear the form after submission
-      _pickupController.clear();
-      _dropController.clear();
-      setState(() {
-        _pickupLocation = null;
-        _dropLocation = null;
-        _markers.clear();
-        _polylines.clear();
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to submit ride request: $e')),
-      );
-    }
+    // Adjust padding to account for UI elements (e.g., text boxes, buttons)
+    final double padding = screenHeight * 0.2; // 20% of screen height as padding
+
+    // Animate the camera to fit the bounds with padding
+    _mapController!.animateCamera(
+      CameraUpdate.newLatLngBounds(bounds, padding),
+    );
   }
+
+  /// Submits the ride request to Supabase
+  Future<void> _submitRideRequest() async {
+  if (_pickupLocation == null || _dropLocation == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Please select both pickup and drop locations')),
+    );
+    return;
+  }
+
+  try {
+    await _supabaseService.insertRideRequest(
+      userId: 3,
+      userName: 'John Doe',
+      userPhno: '1234567890',
+      pickUpLat: _pickupLocation!.latitude,
+      pickUpLng: _pickupLocation!.longitude,
+      dropLat: _dropLocation!.latitude,
+      dropLng: _dropLocation!.longitude,
+      dropAddress: _dropController.text,
+      pickupAddress: _pickupController.text,
+    );
+
+    // Navigate to LoadingScreen
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LoadingScreen(),
+      ),
+    );
+
+    // Wait for the ride request to be accepted
+    while (true) {
+      final rideRequest = await _supabaseService.checkRideRequestStatus(3); // Correct method name
+      if (rideRequest != null) {
+        // Ride request accepted, fetch driver details and OTP
+        final driverDetails = await _supabaseService.fetchDriverDetails(rideRequest['id']); // Correct method name
+        if (driverDetails != null) {
+          // Navigate to DriverTrackingScreen
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => DriverTrackingScreen(
+                driverLocation: LatLng(
+                  driverDetails['current_lat'],
+                  driverDetails['current_lng'],
+                ),
+                otp: driverDetails['otp'],
+              ),
+            ),
+          );
+          break;
+        }
+      }
+      await Future.delayed(Duration(seconds: 5)); // Check every 5 seconds
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to submit ride request: $e')),
+    );
+  }
+}
 
   /// Checks and requests location permissions
   Future<void> _checkLocationPermission() async {
@@ -350,139 +535,268 @@ class _UserScreenState extends State<UserScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('User Interface')),
-      body: Column(
+Widget build(BuildContext context) {
+  return GestureDetector(
+    onTap: () {
+      FocusScope.of(context).unfocus();
+      setState(() {
+        _pickupSuggestions.clear();
+        _dropSuggestions.clear();
+      });
+    },
+    child: Scaffold(
+      extendBodyBehindAppBar: true, // Allows the map to extend behind the AppBar
+      // Fix bottom overflow by using resizeToAvoidBottomInset
+      resizeToAvoidBottomInset: true,
+      body: Stack(
         children: [
-          // Pickup Location Input
-          Padding(
-            padding: const EdgeInsets.all(8.0),
+          GoogleMap(
+            onMapCreated: _onMapCreated,
+            initialCameraPosition: CameraPosition(
+              target: LatLng(12.9716, 77.5946), // Default: Bangalore
+              zoom: 14,
+            ),
+            markers: _markers,
+            polylines: _polylines,
+            myLocationEnabled: true,
+            myLocationButtonEnabled: true,
+            // Dark mode related settings
+            trafficEnabled: false,
+            mapType: MapType.normal,
+            compassEnabled: true,
+            zoomControlsEnabled: false, // Google Maps doesn't show zoom controls in mobile
+            rotateGesturesEnabled: true,
+            tiltGesturesEnabled: true,
+          ),
+          
+          // Use SafeArea to ensure UI elements are not obstructed
+          SafeArea(
             child: Column(
               children: [
-                TextField(
-                  controller: _pickupController,
-                  decoration: InputDecoration(
-                    hintText: "Enter pickup location",
-                    border: OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: Icon(Icons.clear),
-                      onPressed: () {
-                        setState(() {
-                          _pickupController.clear();
-                          _pickupLocation = null;
-                          _updateMarkers();
-                        });
-                      },
+                // Grey container with rounded corners for top elements
+                Container(
+                  margin: EdgeInsets.all(8.0),
+                  padding: EdgeInsets.all(12.0),
+                  decoration: BoxDecoration(
+                    color: Color.fromARGB(255, 40, 40, 40),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        spreadRadius: 1,
+                        blurRadius: 4,
+                        offset: Offset(0, 2),
                     ),
-                    prefixIcon: IconButton(
-                      icon: Icon(Icons.my_location),
-                      onPressed: _setCurrentLocationAsPickup,
-                    ),
+                    ],
                   ),
-                  onChanged: (value) {
-                    if (value.isNotEmpty) {
-                      _fetchSuggestions(value, isPickup: true);
-                    } else {
-                      setState(() {
-                        _pickupSuggestions.clear();
-                      });
-                    }
-                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Back Button
+                      _buildBackButton(),
+                      
+                      SizedBox(height: 12),
+                      
+                      // Pickup Location Input with Current Location Button
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildInputField(
+                              controller: _pickupController,
+                              hintText: "Enter pickup location",
+                              onClear: () {
+                                setState(() {
+                                  _pickupController.clear();
+                                  _pickupLocation = null;
+                                  _updateMarkers();
+                                  _pickupSuggestions.clear();
+                                });
+                              },
+                              onSearch: (value) {
+                                if (value.isNotEmpty) {
+                                  _fetchSuggestions(value, isPickup: true);
+                                } else {
+                                  setState(() {
+                                    _pickupSuggestions.clear();
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                          // Current Location Button
+                          SizedBox(width: 8),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.blueGrey,
+                              borderRadius: BorderRadius.circular(10),
+                              
+                            ),
+                            child: IconButton(
+                              icon: Icon(Icons.my_location),
+                              onPressed: _setCurrentLocationAsPickup,
+                              tooltip: "Use current location",
+                            ),
+                          ),
+                        ],
+                      ),
+                      
+                      SizedBox(height: 12),
+                      
+                      // Drop Location Input
+                      _buildInputField(
+                        controller: _dropController,
+                        hintText: "Enter drop location",
+                        onClear: () {
+                          setState(() {
+                            _dropController.clear();
+                            _dropLocation = null;
+                            _updateMarkers();
+                            _dropSuggestions.clear();
+                          });
+                        },
+                        onSearch: (value) {
+                          if (value.isNotEmpty) {
+                            _fetchSuggestions(value, isPickup: false);
+                          } else {
+                            setState(() {
+                              _dropSuggestions.clear();
+                            });
+                          }
+                        },
+                      ),
+                    ],
+                  ),
                 ),
+
+                // Display Pickup Suggestions
                 if (_pickupSuggestions.isNotEmpty)
-                  Container(
-                    height: 100,
-                    child: ListView.builder(
-                      itemCount: _pickupSuggestions.length,
-                      itemBuilder: (context, index) {
-                        return ListTile(
-                          title: Text(_pickupSuggestions[index]),
-                          onTap: () {
-                            _searchLocation(_pickupSuggestions[index], isPickup: true);
-                          },
-                        );
-                      },
-                    ),
-                  ),
-              ],
-            ),
-          ),
+                  _buildSuggestionsList(_pickupSuggestions, isPickup: true),
 
-          // Drop Location Input
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              children: [
-                TextField(
-                  controller: _dropController,
-                  decoration: InputDecoration(
-                    hintText: "Enter drop location",
-                    border: OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: Icon(Icons.clear),
-                      onPressed: () {
-                        setState(() {
-                          _dropController.clear();
-                          _dropLocation = null;
-                          _updateMarkers();
-                        });
-                      },
-                    ),
-                  ),
-                  onChanged: (value) {
-                    if (value.isNotEmpty) {
-                      _fetchSuggestions(value, isPickup: false);
-                    } else {
-                      setState(() {
-                        _dropSuggestions.clear();
-                      });
-                    }
-                  },
-                ),
+                // Display Drop Suggestions
                 if (_dropSuggestions.isNotEmpty)
-                  Container(
-                    height: 100,
-                    child: ListView.builder(
-                      itemCount: _dropSuggestions.length,
-                      itemBuilder: (context, index) {
-                        return ListTile(
-                          title: Text(_dropSuggestions[index]),
-                          onTap: () {
-                            _searchLocation(_dropSuggestions[index], isPickup: false);
-                          },
-                        );
-                      },
-                    ),
+                  _buildSuggestionsList(_dropSuggestions, isPickup: false),
+                
+
+                Spacer(),
+
+                // Submit Button
+                Padding(
+                  padding: EdgeInsets.only(
+                    left: 16.0, 
+                    right: 16.0, 
+                    bottom: MediaQuery.of(context).viewInsets.bottom > 0 ? 16.0 : 16.0,
+                    top: 16.0
                   ),
+                  child: ElevatedButton(
+                    onPressed: _submitRideRequest,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      elevation: 5,
+                      shadowColor: Colors.grey.withOpacity(0.5),
+                    ),
+                    child: Text('Submit Ride Request', style: TextStyle(color: Colors.black)),
+                  ),
+                ),
+
+                // Add a button to navigate to RealTimeMap
+                Padding(
+                  padding: EdgeInsets.only(
+                    left: 16.0, 
+                    right: 16.0, 
+                    bottom: MediaQuery.of(context).viewInsets.bottom > 0 ? 16.0 : 16.0,
+                    top: 16.0
+                  ),
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => RealTimeMap(),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green, // Different color to distinguish
+                      padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      elevation: 5,
+                      shadowColor: Colors.grey.withOpacity(0.5),
+                    ),
+                    child: Text('Track Share Auto', style: TextStyle(color: Colors.white)),
+                  ),
+                ),
               ],
-            ),
-          ),
-
-          // Google Map Display
-          Expanded(
-            child: GoogleMap(
-              onMapCreated: _onMapCreated,
-              initialCameraPosition: CameraPosition(
-                target: LatLng(12.9716, 77.5946), // Default: Bangalore
-                zoom: 14,
-              ),
-              markers: _markers,
-              polylines: _polylines,
-              myLocationEnabled: true,
-              myLocationButtonEnabled: true,
-            ),
-          ),
-
-          // Submit Button
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: ElevatedButton(
-              onPressed: _submitRideRequest,
-              child: Text('Submit Ride Request'),
             ),
           ),
         ],
+      ),
+    ),
+  );
+}
+
+  // Helper function for input fields
+  Widget _buildInputField({required TextEditingController controller, required String hintText, required VoidCallback onClear, required Function(String) onSearch}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.blueGrey,
+        borderRadius: BorderRadius.circular(10),
+        
+      ),
+      child: TextField(
+        controller: controller,
+        decoration: InputDecoration(
+          hintText: hintText,
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.all(12),
+          suffixIcon: IconButton(icon: Icon(Icons.clear), onPressed: onClear),
+        ),
+        onChanged: onSearch,
+      ),
+    );
+  }
+
+  // Helper function to build the suggestions list
+  Widget _buildSuggestionsList(List<String> suggestions, {required bool isPickup}) {
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 8.0),
+      decoration: BoxDecoration(
+        color: Colors.blueGrey,
+        borderRadius: BorderRadius.circular(10),
+        
+      ),
+      child: ListView.builder(
+        shrinkWrap: true,
+        physics: ClampingScrollPhysics(), // Prevents scroll conflicts
+        itemCount: suggestions.length > 3 ? 3 : suggestions.length, // Limit to prevent overflow
+        itemBuilder: (context, index) {
+          return ListTile(
+            title: Text(suggestions[index]),
+            onTap: () {
+              _searchLocation(suggestions[index], isPickup: isPickup);
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  // Helper function to build the back button
+  Widget _buildBackButton() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.blueGrey,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: IconButton(
+        icon: Icon(Icons.arrow_back),
+        onPressed: () {
+          Navigator.of(context).pop();
+        },
       ),
     );
   }
